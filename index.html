@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Audio Visual Player</title>
+  <style>
+    :root {
+      --bg: #05060a;
+      --fg: #e9ecf5;
+      --muted: #8a90a6;
+      --accent: #7cf7ff;
+      --accent2: #ff5fd2;
+      --glass: rgba(16, 18, 28, .55);
+      --line: rgba(255, 255, 255, .1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Inter", "PingFang TC", "Noto Sans TC", system-ui, sans-serif
+    }
+
+    canvas {
+      display: block
+    }
+
+    #app {
+      position: fixed;
+      inset: 0
+    }
+
+    header {
+      position: fixed;
+      top: 20px;
+      left: 24px;
+      right: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      gap: 12px
+    }
+
+    .brand h1 {
+      font-size: 13px;
+      letter-spacing: .35em;
+      text-transform: uppercase;
+      font-weight: 600
+    }
+
+    .brand p {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      letter-spacing: .08em
+    }
+
+    .palettes {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto
+    }
+
+    .palettes button {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform .2s, border-color .2s
+    }
+
+    .palettes button.active {
+      border-color: #fff;
+      transform: scale(1.15)
+    }
+
+    .meters {
+      position: fixed;
+      top: 80px;
+      left: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none
+    }
+
+    .meter {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: .15em
+    }
+
+    .meter span {
+      width: 52px
+    }
+
+    .meter i {
+      display: block;
+      height: 3px;
+      width: 120px;
+      background: var(--line);
+      border-radius: 2px;
+      overflow: hidden
+    }
+
+    .meter b {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent2))
+    }
+
+    .panel {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      width: min(760px, calc(100% - 32px));
+      background: var(--glass);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px 20px;
+      display: grid;
+      gap: 12px
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 14px
+    }
+
+    .play {
+      flex: none;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #05060a;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 24px rgba(124, 247, 255, .35);
+      transition: transform .15s
+    }
+
+    .play:hover {
+      transform: scale(1.06)
+    }
+
+    .play:disabled {
+      opacity: .4;
+      cursor: wait
+    }
+
+    .play svg {
+      width: 20px;
+      height: 20px
+    }
+
+    .track {
+      flex: 1;
+      min-width: 0
+    }
+
+    .track .title {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .track .status {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px
+    }
+
+    .time {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--muted);
+      flex: none
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--accent) var(--p, 0%), var(--line) var(--p, 0%));
+      outline: none;
+      cursor: pointer
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 8px var(--accent)
+    }
+
+    input[type=range]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border: none;
+      border-radius: 50%;
+      background: #fff
+    }
+
+    .fx {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px
+    }
+
+    .fx label {
+      display: grid;
+      gap: 6px;
+      font-size: 10px;
+      letter-spacing: .15em;
+      color: var(--muted);
+      text-transform: uppercase
+    }
+
+    .hint {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.8;
+      text-align: right;
+      pointer-events: none;
+      letter-spacing: .05em
+    }
+
+    @media (max-width:1100px) {
+      .hint {
+        display: none
+      }
+    }
+
+    @media (max-width:560px) {
+      .fx {
+        grid-template-columns: 1fr
+      }
+
+      .meters {
+        display: none
+      }
+
+      .panel {
+        bottom: 16px
+      }
+    }
+
+    #drop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(5, 6, 10, .8);
+      font-size: 18px;
+      letter-spacing: .2em;
+      border: 2px dashed var(--accent);
+      z-index: 10
+    }
+
+    #drop.show {
+      display: grid
+    }
+
+    .filebtn {
+      font-size: 11px;
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline
+    }
+
+    .filebtn input {
+      display: none
+    }
+
+    /* ---- Pass 濾鏡清單 ---- */
+    .passes {
+      position: fixed;
+      top: 60px;
+      right: 24px;
+      width: 190px;
+      max-height: calc(100vh - 280px);
+      overflow-y: auto;
+      background: var(--glass);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      z-index: 2
+    }
+
+    .passes-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      letter-spacing: .25em;
+      color: var(--muted);
+      padding: 2px 4px 8px;
+      cursor: pointer;
+      user-select: none
+    }
+
+    .passes-head button {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 10px;
+      letter-spacing: .1em;
+      cursor: pointer
+    }
+
+    .passes-head:hover,
+    .passes-head:focus-visible {
+      color: var(--fg);
+      outline: none
+    }
+
+    .passes-title {
+      display: flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    .passes-title em {
+      font-style: normal;
+      color: var(--accent);
+      letter-spacing: .05em
+    }
+
+    .chev {
+      width: 12px;
+      height: 12px;
+      transition: transform .25s
+    }
+
+    .passes.collapsed {
+      width: auto
+    }
+
+    .passes.collapsed .chev {
+      transform: rotate(-90deg)
+    }
+
+    .passes.collapsed .passes-list,
+    .passes.collapsed #passesClear {
+      display: none
+    }
+
+    .passes.collapsed .passes-head {
+      padding-bottom: 2px;
+      gap: 12px
+    }
+
+    .passes-list {
+      display: grid;
+      gap: 4px
+    }
+
+    .pass-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 7px 9px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, .03);
+      color: var(--fg);
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+      transition: background .15s, border-color .15s
+    }
+
+    .pass-item:hover {
+      background: rgba(255, 255, 255, .08)
+    }
+
+    .pass-item i {
+      flex: none;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid var(--muted)
+    }
+
+    .pass-item small {
+      margin-left: auto;
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: .05em
+    }
+
+    .pass-item.on {
+      border-color: var(--accent);
+      background: rgba(255, 255, 255, .06)
+    }
+
+    .pass-item.on i {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent)
+    }
+
+    @media (max-width:560px) {
+      .passes {
+        top: 56px;
+        right: 16px;
+        width: 160px;
+        max-height: 40vh
+      }
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+  <script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <header>
+    <div class="brand">
+      <h1>William77 - Audio · Visual</h1>
+      <p>Three.js × Tone.js</p>
+    </div>
+    <div class="palettes" id="palettes"></div>
+  </header>
+
+  <aside class="passes" id="passes">
+    <div class="passes-head" id="passesHead" role="button" tabindex="0" aria-expanded="true" aria-controls="passesList">
+      <span class="passes-title">
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+        濾鏡 PASSES <em id="passesCount"></em>
+      </span>
+      <button id="passesClear" title="全部關閉">清除</button>
+    </div>
+    <div class="passes-list" id="passesList"></div>
+  </aside>
+
+  <div class="meters">
+    <div class="meter"><span>BASS</span><i><b id="mBass"></b></i></div>
+    <div class="meter"><span>MID</span><i><b id="mMid"></b></i></div>
+    <div class="meter"><span>TREBLE</span><i><b id="mTreble"></b></i></div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <button class="play" id="playBtn" disabled aria-label="播放">
+        <svg id="icoPlay" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 4.5v15l13-7.5z" />
+        </svg>
+        <svg id="icoPause" viewBox="0 0 24 24" fill="currentColor" style="display:none">
+          <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+        </svg>
+      </button>
+      <div class="track">
+        <div class="title" id="title">Upbeat Music — HitsLab</div>
+        <div class="status" id="status">載入音訊中…</div>
+      </div>
+      <div class="time" id="time">0:00 / 0:00</div>
+    </div>
+    <input type="range" id="seek" min="0" max="1000" value="0" aria-label="播放進度">
+    <div class="fx">
+      <label>音量 Volume<input type="range" id="vol" min="-40" max="0" value="-6" step="0.5"></label>
+      <label>低通濾波 Filter<input type="range" id="filter" min="0" max="1" value="1" step="0.001"></label>
+      <label>殘響 Reverb<input type="range" id="reverb" min="0" max="1" value="0" step="0.01"></label>
+    </div>
+  </div>
+
+  <div class="hint">
+    拖曳畫面：旋轉視角 · 滾輪：縮放<br>
+    空白鍵：播放/暫停 · ← →：快轉 5 秒<br>
+    雙擊畫面：切換配色 · F：收合濾鏡清單<br>
+    拖入 MP3 可替換音樂
+  </div>
+  <div id="drop">放開以載入音樂</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+    import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+    import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
+    import { GlitchPass } from 'three/addons/postprocessing/GlitchPass.js';
+    import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
+    import { DotScreenPass } from 'three/addons/postprocessing/DotScreenPass.js';
+    import { HalftonePass } from 'three/addons/postprocessing/HalftonePass.js';
+    import { RGBShiftShader } from 'three/addons/shaders/RGBShiftShader.js';
+    import { KaleidoShader } from 'three/addons/shaders/KaleidoShader.js';
+    import { MirrorShader } from 'three/addons/shaders/MirrorShader.js';
+    import { SobelOperatorShader } from 'three/addons/shaders/SobelOperatorShader.js';
+    import { HueSaturationShader } from 'three/addons/shaders/HueSaturationShader.js';
+    import { SepiaShader } from 'three/addons/shaders/SepiaShader.js';
+    import { TechnicolorShader } from 'three/addons/shaders/TechnicolorShader.js';
+    import { VignetteShader } from 'three/addons/shaders/VignetteShader.js';
+
+    const AUDIO_URL = './hitslab-upbeat-upbeat-music-300654.mp3';
+    const $ = id => document.getElementById(id);
+
+    /* ============================ AUDIO (Tone.js) ============================ */
+    const player = new Tone.Player({ loop: false, fadeIn: 0.02, fadeOut: 0.05 });
+    const filter = new Tone.Filter({ type: 'lowpass', frequency: 20000, rolloff: -24, Q: 1.5 });
+    const reverb = new Tone.Reverb({ decay: 5, preDelay: 0.02, wet: 0 });
+    const fft = new Tone.Analyser('fft', 256);
+    const wave = new Tone.Analyser('waveform', 512);
+    player.chain(filter, reverb, Tone.Destination);
+    reverb.connect(fft);
+    reverb.connect(wave);
+    Tone.Destination.volume.value = -6;
+
+    let duration = 0, offset = 0, startAt = 0, playing = false;
+    const now = () => Tone.now();
+    const currentTime = () => playing ? Math.min(offset + (now() - startAt), duration) : offset;
+
+    async function loadAudio(url, title) {
+      $('playBtn').disabled = true;
+      $('status').textContent = '載入音訊中…';
+      if (playing) stop();
+      offset = 0;
+      try {
+        await player.load(url);
+        duration = player.buffer.duration;
+        if (title) $('title').textContent = title;
+        $('status').textContent = '準備就緒 — 按下播放';
+        $('playBtn').disabled = false;
+        updateTime();
+      } catch (e) {
+        console.error(e);
+        $('status').innerHTML = '無法自動載入（請用本機伺服器開啟），或 ' +
+          '<label class="filebtn">選擇 MP3 檔案<input type="file" id="file" accept="audio/*"></label>';
+        $('file').addEventListener('change', ev => ev.target.files[0] && loadFile(ev.target.files[0]));
+      }
+    }
+    function loadFile(file) {
+      loadAudio(URL.createObjectURL(file), file.name.replace(/\.[^.]+$/, ''));
+    }
+
+    async function play() {
+      await Tone.start();
+      if (offset >= duration - 0.05) offset = 0;
+      const t = now() + 0.05;
+      player.start(t, offset);
+      startAt = t; playing = true;
+      setPlayIcon();
+    }
+    function stop() {
+      offset = currentTime();
+      player.stop();
+      playing = false;
+      setPlayIcon();
+    }
+    function seek(t) {
+      t = Math.max(0, Math.min(duration, t));
+      if (playing) {
+        const s = now() + 0.03;
+        player.restart(s, t);
+        startAt = s; offset = t;
+      } else offset = t;
+      updateTime();
+    }
+    const toggle = () => { if (!duration) return; playing ? stop() : play(); };
+
+    function setPlayIcon() {
+      $('icoPlay').style.display = playing ? 'none' : '';
+      $('icoPause').style.display = playing ? '' : 'none';
+      $('status').textContent = playing ? '播放中' : (duration ? '已暫停' : $('status').textContent);
+    }
+    const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    let seeking = false;
+    function updateTime() {
+      const t = currentTime();
+      $('time').textContent = `${fmt(t)} / ${fmt(duration)}`;
+      if (!seeking) setRange($('seek'), duration ? (t / duration) * 1000 : 0);
+    }
+    function setRange(el, v) {
+      if (v !== undefined) el.value = v;
+      el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min)) * 100 + '%');
+    }
+
+    /* ---- UI bindings ---- */
+    $('playBtn').addEventListener('click', toggle);
+    const seekEl = $('seek');
+    seekEl.addEventListener('input', () => {
+      seeking = true; setRange(seekEl);
+      $('time').textContent = `${fmt(seekEl.value / 1000 * duration)} / ${fmt(duration)}`;
+    });
+    seekEl.addEventListener('change', () => { seek(seekEl.value / 1000 * duration); seeking = false; });
+
+    const volEl = $('vol');
+    volEl.addEventListener('input', () => { Tone.Destination.volume.rampTo(+volEl.value <= -40 ? -Infinity : +volEl.value, 0.05); setRange(volEl); });
+    const filEl = $('filter');
+    filEl.addEventListener('input', () => { filter.frequency.rampTo(80 * Math.pow(20000 / 80, +filEl.value), 0.05); setRange(filEl); });
+    const revEl = $('reverb');
+    revEl.addEventListener('input', () => { reverb.wet.rampTo(+revEl.value, 0.1); setRange(revEl); });
+    [volEl, filEl, revEl, seekEl].forEach(el => setRange(el));
+
+    window.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+      if (e.code === 'Space') { e.preventDefault(); toggle(); }
+      if (e.code === 'ArrowRight') seek(currentTime() + 5);
+      if (e.code === 'ArrowLeft') seek(currentTime() - 5);
+    });
+
+    /* drag & drop */
+    let dragDepth = 0;
+    addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('drop').classList.add('show'); });
+    addEventListener('dragleave', () => { if (--dragDepth <= 0) $('drop').classList.remove('show'); });
+    addEventListener('dragover', e => e.preventDefault());
+    addEventListener('drop', e => {
+      e.preventDefault(); dragDepth = 0; $('drop').classList.remove('show');
+      const f = [...e.dataTransfer.files].find(f => f.type.startsWith('audio'));
+      if (f) loadFile(f);
+    });
+
+    /* ============================ VISUAL (Three.js) ============================ */
+    const PALETTES = [
+      { a: '#7cf7ff', b: '#ff5fd2', bg: '#05060a' },
+      { a: '#ffb347', b: '#ff3c6e', bg: '#0a0506' },
+      { a: '#9dff7a', b: '#3a7bff', bg: '#04080a' },
+      { a: '#f4f1ff', b: '#8b5cff', bg: '#06050c' },
+      { a: '#ffe66d', b: '#00c2a8', bg: '#040908' },
+      { a: '#ff8a5c', b: '#7a3cff', bg: '#08050a' },
+      { a: '#a0e9ff', b: '#2f6bff', bg: '#03060c' },
+    ];
+    let pal = 0;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    $('app').appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x05060a, 0.035);
+    const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 200);
+    camera.position.set(0, 1.5, 11);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.6;
+    controls.minDistance = 4;
+    controls.maxDistance = 30;
+    controls.enablePan = false;
+
+    const colA = new THREE.Color(), colB = new THREE.Color();
+
+    /* ---- 1. Audio-reactive blob ---- */
+    const NOISE = /* glsl */`
+vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
+vec4 permute(vec4 x){return mod289(((x*34.)+1.)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1./6.,1./3.);const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.-g;vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;i=mod289(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=.142857142857;vec3 ns=n_*D.wyz-D.xzx;vec4 j=p-49.*floor(p*ns.z*ns.z);
+  vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.*x_);vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;
+  vec4 h=1.-abs(x)-abs(y);vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.+1.;vec4 s1=floor(b1)*2.+1.;vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;
+  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+    const blobUniforms = {
+      uTime: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uTreble: { value: 0 },
+      uColorA: { value: colA }, uColorB: { value: colB },
+    };
+    // 中央粒子雲：以 Fibonacci 分佈於球殼並帶有些許內部厚度，由噪聲 + 音訊驅動位移
+    const CORE_N = 14000;
+    const cPos = new Float32Array(CORE_N * 3), cSeed = new Float32Array(CORE_N);
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < CORE_N; i++) {
+      const y = 1 - (i / (CORE_N - 1)) * 2, rr = Math.sqrt(1 - y * y), th = golden * i;
+      const r = 2 * (0.82 + Math.pow(Math.random(), 3) * 0.18); // 大多在表面，少數落在內部
+      cPos.set([Math.cos(th) * rr * r, y * r, Math.sin(th) * rr * r], i * 3);
+      cSeed[i] = Math.random();
+    }
+    const coreGeo = new THREE.BufferGeometry();
+    coreGeo.setAttribute('position', new THREE.BufferAttribute(cPos, 3));
+    coreGeo.setAttribute('aSeed', new THREE.BufferAttribute(cSeed, 1));
+    blobUniforms.uPR = { value: renderer.getPixelRatio() };
+
+    const core = new THREE.Points(coreGeo, new THREE.ShaderMaterial({
+      uniforms: blobUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: /* glsl */`
+    uniform float uTime,uBass,uMid,uTreble,uPR;
+    attribute float aSeed;
+    varying float vDisp; varying float vSeed; varying float vA;
+    ${NOISE}
+    void main(){
+      vec3 dir = normalize(position);
+      vec3 p = position;
+      float n1 = snoise(p*0.55 + vec3(uTime*0.25));
+      float n2 = snoise(p*1.8  + vec3(uTime*0.9));
+      float n3 = snoise(p*4.5  + vec3(uTime*1.6));
+      float d = n1*(0.12 + uBass*0.75) + n2*(0.04 + uMid*0.28) + n3*(uTreble*0.12);
+      // 高音時部分粒子向外噴散
+      d += aSeed * aSeed * uTreble * 0.6;
+      p += dir * d;
+      // 細微漂浮
+      p += vec3(sin(uTime*1.3 + aSeed*40.), cos(uTime*1.1 + aSeed*25.), sin(uTime*0.9 + aSeed*50.)) * 0.025;
+      vDisp = d; vSeed = aSeed;
+      vec4 mv = modelViewMatrix * vec4(p,1.);
+      vA = 0.18 + 0.22 * smoothstep(-0.2, 0.6, d) + uMid * 0.15;
+      gl_PointSize = (0.8 + aSeed * 1.6 + uBass * 1.2) * uPR * (14. / -mv.z);
+      gl_Position = projectionMatrix * mv;
+    }`,
+      fragmentShader: /* glsl */`
+    uniform vec3 uColorA,uColorB;
+    varying float vDisp; varying float vSeed; varying float vA;
+    void main(){
+      float d = length(gl_PointCoord - .5); if (d > .5) discard;
+      float a = smoothstep(.5, .05, d) * vA;
+      vec3 col = mix(uColorA, uColorB, smoothstep(-0.2, 0.6, vDisp) * 0.7 + vSeed * 0.3);
+      gl_FragColor = vec4(col * 0.8, a);
+    }`,
+    }));
+    scene.add(core);
+
+    /* ---- 2. Circular frequency bars ---- */
+    const BARS = 128, BAR_R = 3.6;
+    const barGeo = new THREE.BoxGeometry(0.01, 1, 0.01); barGeo.translate(0, 0.5, 0);
+    const barMat = new THREE.MeshBasicMaterial({ toneMapped: false });
+    const bars = new THREE.InstancedMesh(barGeo, barMat, BARS * 2);
+    const dummy = new THREE.Object3D(), tmpCol = new THREE.Color();
+    scene.add(bars);
+    const barLevels = new Float32Array(BARS);
+
+    /* ---- 3. Waveform ring ---- */
+    const WAVE_N = 512, WAVE_R = 5.2;
+    const waveGeo = new THREE.BufferGeometry();
+    waveGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((WAVE_N + 1) * 3), 3));
+    const waveLine = new THREE.Line(waveGeo, new THREE.LineBasicMaterial({ transparent: true, opacity: 0.85, toneMapped: false }));
+    waveLine.rotation.x = Math.PI / 2;
+    scene.add(waveLine);
+    const waveLine2 = waveLine.clone(); waveLine2.material = waveLine.material.clone();
+    waveLine2.scale.setScalar(1.12); waveLine2.material.opacity = 0.3;
+    scene.add(waveLine2);
+
+    /* ---- 4. Particle field ---- */
+    const P_N = 4000;
+    const pPos = new Float32Array(P_N * 3), pSeed = new Float32Array(P_N);
+    for (let i = 0; i < P_N; i++) {
+      const r = 7 + Math.random() * 22, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+      pPos.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th)], i * 3);
+      pSeed[i] = Math.random();
+    }
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    pGeo.setAttribute('aSeed', new THREE.BufferAttribute(pSeed, 1));
+    const pUniforms = { uTime: { value: 0 }, uBass: { value: 0 }, uTreble: { value: 0 }, uColorA: { value: colA }, uColorB: { value: colB }, uPR: { value: renderer.getPixelRatio() } };
+    const particles = new THREE.Points(pGeo, new THREE.ShaderMaterial({
+      uniforms: pUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: `
+    uniform float uTime,uBass,uTreble,uPR; attribute float aSeed; varying float vSeed; varying float vA;
+    void main(){
+      vec3 p = position * (1. + uBass*0.18*aSeed);
+      p.y += sin(uTime*0.5 + aSeed*30.)*0.4;
+      vec4 mv = modelViewMatrix * vec4(p,1.);
+      vSeed = aSeed;
+      float tw = 0.5 + 0.5*sin(uTime*3. + aSeed*60.);
+      vA = 0.35 + tw*0.4 + uTreble*0.8;
+      gl_PointSize = (1.5 + aSeed*3. + uBass*4.*aSeed) * uPR * (18. / -mv.z);
+      gl_Position = projectionMatrix * mv;
+    }`,
+      fragmentShader: `
+    uniform vec3 uColorA,uColorB; varying float vSeed; varying float vA;
+    void main(){
+      float d = length(gl_PointCoord - .5); if(d > .5) discard;
+      float a = smoothstep(.5, 0., d) * vA;
+      gl_FragColor = vec4(mix(uColorA, uColorB, vSeed), a);
+    }`,
+    }));
+    scene.add(particles);
+
+    /* ---- Post processing ---- */
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.4, 0.5, 0.25);
+    composer.addPass(bloom);
+
+    /* ---- Pass 濾鏡（可在右側清單切換，可疊加；依下列順序串接） ---- */
+    const drawW = () => innerWidth * renderer.getPixelRatio();
+    const drawH = () => innerHeight * renderer.getPixelRatio();
+
+    const PixelateShader = {
+      uniforms: { tDiffuse: { value: null }, resolution: { value: new THREE.Vector2() }, pixelSize: { value: 6 } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }`,
+      fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 resolution; uniform float pixelSize; varying vec2 vUv;
+        void main(){ vec2 d = pixelSize / resolution; gl_FragColor = texture2D(tDiffuse, d * (floor(vUv / d) + .5)); }`,
+    };
+
+    const shader = (def, init = {}) => {
+      const p = new ShaderPass(def);
+      for (const k in init) p.uniforms[k].value = init[k];
+      return p;
+    };
+
+    const PASSES = [
+      {
+        id: 'afterimage', name: '殘影', tag: 'Afterimage', pass: new AfterimagePass(0.9),
+        update: (p) => { p.uniforms.damp.value = Math.min(0.96, 0.86 + lv.mid * 0.1); }
+      },
+      {
+        id: 'kaleido', name: '萬花筒', tag: 'Kaleido', pass: shader(KaleidoShader, { sides: 6 }),
+        update: (p, dt) => { p.uniforms.angle.value += dt * (0.1 + lv.mid * 0.8); }
+      },
+      { id: 'mirror', name: '鏡像', tag: 'Mirror', pass: shader(MirrorShader, { side: 1 }) },
+      {
+        id: 'pixelate', name: '像素化', tag: 'Pixel', pass: shader(PixelateShader),
+        update: (p) => { p.uniforms.pixelSize.value = (5 + beatKick * 10) * renderer.getPixelRatio(); }
+      },
+      {
+        id: 'rgbshift', name: 'RGB 色偏', tag: 'RGBShift', pass: shader(RGBShiftShader),
+        update: (p, dt, t) => { p.uniforms.amount.value = 0.0015 + lv.bass * 0.01 + beatKick * 0.008; p.uniforms.angle.value = t * 0.6; }
+      },
+      {
+        id: 'hue', name: '色相循環', tag: 'HueSat', pass: shader(HueSaturationShader, { saturation: 0.25 }),
+        update: (p, dt, t) => { p.uniforms.hue.value = ((t * 0.08) % 2) - 1; }
+      },
+      { id: 'sepia', name: '復古褐色', tag: 'Sepia', pass: shader(SepiaShader, { amount: 0.9 }) },
+      { id: 'technicolor', name: '特藝彩色', tag: 'Technicolor', pass: shader(TechnicolorShader) },
+      { id: 'sobel', name: '邊緣偵測', tag: 'Sobel', pass: shader(SobelOperatorShader) },
+      {
+        id: 'dotscreen', name: '網點', tag: 'DotScreen', pass: new DotScreenPass(new THREE.Vector2(0, 0), 0.5, 0.9),
+        update: (p) => { p.uniforms.scale.value = 0.9 + lv.bass * 0.8; }
+      },
+      {
+        id: 'halftone', name: '半色調', tag: 'Halftone', pass: new HalftonePass(drawW(), drawH(), { shape: 1, radius: 4, scatter: 0, blending: 1, greyscale: false }),
+        update: (p) => { p.uniforms.radius.value = 3 + lv.bass * 5; }
+      },
+      {
+        id: 'film', name: '底片顆粒', tag: 'Film', pass: new FilmPass(0.5, false),
+        update: (p) => { p.uniforms.intensity.value = 0.4 + lv.treble * 0.8; }
+      },
+      { id: 'glitch', name: '故障', tag: 'Glitch', pass: new GlitchPass() },
+      { id: 'vignette', name: '暗角', tag: 'Vignette', pass: shader(VignetteShader, { offset: 1.0, darkness: 1.3 }) },
+    ];
+
+    function syncPassSizes() {
+      const w = drawW(), h = drawH();
+      for (const { id, pass } of PASSES) {
+        if (id === 'sobel') pass.uniforms.resolution.value.set(w, h);
+        if (id === 'pixelate') pass.uniforms.resolution.value.set(w, h);
+      }
+    }
+    syncPassSizes();
+
+    for (const f of PASSES) { f.pass.enabled = false; composer.addPass(f.pass); }
+    composer.addPass(new OutputPass());
+
+    function setPass(f, on) {
+      f.pass.enabled = on;
+      f.el.classList.toggle('on', on);
+      f.el.setAttribute('aria-pressed', on);
+      if (on && f.id === 'afterimage') f.pass.uniforms.damp.value = 0.9; // 重新啟用時避免殘留舊畫面過久
+      const n = PASSES.filter(p => p.pass.enabled).length;
+      $('passesCount').textContent = n ? `· ${n}` : '';
+    }
+    PASSES.forEach(f => {
+      const b = document.createElement('button');
+      b.className = 'pass-item';
+      b.innerHTML = `<i></i>${f.name}<small>${f.tag}</small>`;
+      b.onclick = () => setPass(f, !f.pass.enabled);
+      f.el = b;
+      setPass(f, false);
+      $('passesList').appendChild(b);
+    });
+    $('passesClear').onclick = e => { e.stopPropagation(); PASSES.forEach(f => setPass(f, false)); };
+    // 收合 / 展開（狀態記在瀏覽器，手機寬度預設收合）
+    function setCollapsed(c) {
+      $('passes').classList.toggle('collapsed', c);
+      $('passesHead').setAttribute('aria-expanded', !c);
+      try { localStorage.setItem('av-passes-collapsed', c ? '1' : '0'); } catch (e) { }
+    }
+    let savedCollapsed = null;
+    try { savedCollapsed = localStorage.getItem('av-passes-collapsed'); } catch (e) { }
+    setCollapsed(savedCollapsed === null ? innerWidth < 560 : savedCollapsed === '1');
+    $('passesHead').onclick = () => setCollapsed(!$('passes').classList.contains('collapsed'));
+    $('passesHead').onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); $('passesHead').click(); }
+    };
+    window.addEventListener('keydown', e => { if (e.key === 'f' || e.key === 'F') $('passesHead').click(); });
+
+    /* ---- Palettes ---- */
+    function applyPalette(i) {
+      pal = (i + PALETTES.length) % PALETTES.length;
+      const p = PALETTES[pal];
+      colA.set(p.a); colB.set(p.b);
+      scene.background = new THREE.Color(p.bg);
+      scene.fog.color.set(p.bg);
+      document.documentElement.style.setProperty('--accent', p.a);
+      document.documentElement.style.setProperty('--accent2', p.b);
+      document.documentElement.style.setProperty('--bg', p.bg);
+      document.querySelectorAll('.palettes button').forEach((b, j) => b.classList.toggle('active', j === pal));
+    }
+    PALETTES.forEach((p, i) => {
+      const b = document.createElement('button');
+      b.style.background = `linear-gradient(135deg,${p.a},${p.b})`;
+      b.setAttribute('aria-label', `配色 ${i + 1}`);
+      b.onclick = () => applyPalette(i);
+      $('palettes').appendChild(b);
+    });
+    applyPalette(Math.floor(Math.random() * PALETTES.length)); // 每次載入隨機選一組配色
+    renderer.domElement.addEventListener('dblclick', () => applyPalette(pal + 1));
+
+    /* ============================ ANALYSIS + LOOP ============================ */
+    const norm = db => Math.min(1, Math.max(0, (db + 95) / 75));
+    const band = (arr, a, b) => { let s = 0; for (let i = a; i < b; i++) s += norm(arr[i]); return s / (b - a); };
+    const lv = { bass: 0, mid: 0, treble: 0 };
+    const smooth = (cur, target, up = 0.5, down = 0.08) => cur + (target - cur) * (target > cur ? up : down);
+    let beatKick = 0, lastBass = 0;
+
+    const clock = new THREE.Clock();
+    function frame() {
+      const dt = clock.getDelta(), t = clock.elapsedTime;
+
+      const f = fft.getValue();   // dB per bin, 256 bins ≈ 86 Hz each
+      const w = wave.getValue();  // -1..1
+      lv.bass = smooth(lv.bass, band(f, 0, 4));
+      lv.mid = smooth(lv.mid, band(f, 4, 40));
+      lv.treble = smooth(lv.treble, band(f, 40, 160));
+
+      // simple beat detection on bass rise
+      if (lv.bass - lastBass > 0.06 && lv.bass > 0.45) beatKick = 1;
+      lastBass = lv.bass;
+      beatKick *= 0.9;
+
+      // blob
+      blobUniforms.uTime.value = t;
+      blobUniforms.uBass.value = lv.bass;
+      blobUniforms.uMid.value = lv.mid;
+      blobUniforms.uTreble.value = lv.treble;
+      core.scale.setScalar(1 + lv.bass * 0.2 + beatKick * 0.06);
+      core.rotation.y += dt * (0.1 + lv.mid * 0.6);
+      core.rotation.x += dt * 0.05;
+
+      // bars (mirrored around circle)
+      for (let i = 0; i < BARS; i++) {
+        const bin = Math.floor(Math.pow(i / BARS, 1.6) * 180) + 1; // log-ish spread
+        barLevels[i] = smooth(barLevels[i], norm(f[bin]), 0.6, 0.12);
+        const h = 0.05 + barLevels[i] * 2.6;
+        for (let side = 0; side < 2; side++) {
+          const ang = (side ? -1 : 1) * (i / BARS) * Math.PI + Math.PI / 2;
+          dummy.position.set(Math.cos(ang) * BAR_R, 0, Math.sin(ang) * BAR_R);
+          dummy.rotation.set(0, -ang, 0);
+          dummy.scale.set(1, h, 1);
+          dummy.updateMatrix();
+          const idx = i * 2 + side;
+          bars.setMatrixAt(idx, dummy.matrix);
+          tmpCol.copy(colA).lerp(colB, i / BARS).multiplyScalar(0.6 + barLevels[i] * 1.8);
+          bars.setColorAt(idx, tmpCol);
+        }
+      }
+      bars.instanceMatrix.needsUpdate = true;
+      bars.instanceColor.needsUpdate = true;
+      bars.rotation.y = -t * 0.08;
+
+      // waveform ring
+      const pos = waveGeo.attributes.position.array;
+      for (let i = 0; i <= WAVE_N; i++) {
+        const k = i % WAVE_N, ang = (i / WAVE_N) * Math.PI * 2;
+        const r = WAVE_R + w[k] * (0.6 + lv.mid * 1.2);
+        pos[i * 3] = Math.cos(ang) * r; pos[i * 3 + 1] = Math.sin(ang) * r; pos[i * 3 + 2] = w[k] * 0.4;
+      }
+      waveGeo.attributes.position.needsUpdate = true;
+      waveLine.material.color.copy(colA).multiplyScalar(1.2);
+      waveLine2.material.color.copy(colB);
+      waveLine.rotation.z = t * 0.05; waveLine2.rotation.z = -t * 0.04;
+      waveLine.rotation.x = Math.PI / 2 + Math.sin(t * 0.3) * 0.15;
+      waveLine2.rotation.x = Math.PI / 2 + Math.cos(t * 0.25) * 0.2;
+
+      // particles
+      pUniforms.uTime.value = t; pUniforms.uBass.value = lv.bass; pUniforms.uTreble.value = lv.treble;
+      particles.rotation.y += dt * (0.02 + lv.mid * 0.1);
+
+      // camera & post
+      bloom.strength = 0.35 + lv.bass * 0.45 + beatKick * 0.2;
+      controls.autoRotateSpeed = 0.5 + lv.mid * 3;
+      camera.fov = 55 - beatKick * 3; camera.updateProjectionMatrix();
+      controls.update();
+
+      // meters / time
+      $('mBass').style.width = lv.bass * 100 + '%';
+      $('mMid').style.width = lv.mid * 100 + '%';
+      $('mTreble').style.width = lv.treble * 100 + '%';
+      if (playing && currentTime() >= duration) { player.stop(); playing = false; offset = 0; setPlayIcon(); $('status').textContent = '播放結束'; }
+      updateTime();
+
+      for (const f of PASSES) if (f.pass.enabled && f.update) f.update(f.pass, dt, t);
+
+      composer.render(dt);
+      requestAnimationFrame(frame);
+    }
+    frame();
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); syncPassSizes();
+    });
+
+    loadAudio(AUDIO_URL);
+  </script>
+</body>
+
+</html>
